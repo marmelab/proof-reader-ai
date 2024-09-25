@@ -7,10 +7,7 @@ import parseDiff, { Chunk, File } from "parse-diff";
 
 const GITHUB_TOKEN: string = process.env.GITHUB_TOKEN as string; // core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = process.env.OPENAI_API_KEY as string; // core.getInput("OPENAI_API_KEY");
-console.log({ GITHUB_TOKEN });
 const OPENAI_API_MODEL: string = "gpt-3.5-turbo";
-
-console.log({ OPENAI_API_KEY });
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
@@ -68,12 +65,9 @@ async function analyzeCode(
     if (file.to === "/dev/null") continue; // Ignore deleted files
     for (const chunk of file.chunks) {
       const prompt = createPrompt(file, chunk);
-      const aiResponse = await getAIResponse(prompt, chunk);
+      const aiResponse = await getAIResponse(prompt, chunk, file.to!);
       if (aiResponse) {
-        const newComments = createComment(file, chunk, aiResponse);
-        if (newComments) {
-          comments.push(...newComments);
-        }
+        comments.push(...aiResponse);
       }
     }
   }
@@ -113,11 +107,15 @@ ${chunk.changes
 
 async function getAIResponse(
   prompt: string,
-  chunk: Chunk
-): Promise<Array<{
-  lineNumber: string;
-  reviewComment: string;
-}> | null> {
+  chunk: Chunk,
+  path: string
+): Promise<
+  {
+    line: number;
+    path: string;
+    body: string;
+  }[]
+> {
   const article = `${chunk.content}
 ${chunk.changes
   // @ts-expect-error - ln and ln2 exists where needed
@@ -133,7 +131,6 @@ ${chunk.changes
     presence_penalty: 0,
   };
 
-  console.log("prompt:", prompt);
   try {
     const response = await openai.chat.completions.create({
       ...queryConfig,
@@ -151,7 +148,6 @@ ${chunk.changes
 
     const res = response.choices[0].message?.content?.trim() || "[]";
     const result = JSON.parse(res);
-    console.log("openAPI:", result);
 
     const articleLines = article
       .split("\n")
@@ -182,13 +178,15 @@ ${chunk.changes
       };
     });
 
-    console.log("resultWithLineNumber", resultWithLineNumber);
-
-    const comments = resultWithLineNumber
+    const comments: {
+      line: number;
+      path: string;
+      body: string;
+    }[] = resultWithLineNumber
       .filter(({ position }: any) => position !== undefined)
       .map((item: any) => ({
-        position: item.position,
-        path: "",
+        line: item.position,
+        path,
         body: `${item.comment}
       ${
         item.suggestion &&
@@ -203,28 +201,8 @@ ${chunk.changes
     return comments;
   } catch (error) {
     console.error("Error:", error);
-    return null;
+    return [];
   }
-}
-
-function createComment(
-  file: File,
-  chunk: Chunk,
-  aiResponses: Array<{
-    lineNumber: string;
-    reviewComment: string;
-  }>
-): Array<{ body: string; path: string; line: number }> {
-  return aiResponses.flatMap((aiResponse) => {
-    if (!file.to) {
-      return [];
-    }
-    return {
-      body: aiResponse.reviewComment,
-      path: file.to,
-      line: Number(aiResponse.lineNumber),
-    };
-  });
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -250,7 +228,6 @@ async function main() {
   diff = await getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
 
   if (!diff) {
-    // eslint-disable-next-line no-console
     console.log("No diff found");
     return;
   }
