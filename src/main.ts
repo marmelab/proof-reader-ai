@@ -53,7 +53,6 @@ async function getDiff(
     pull_number,
     mediaType: { format: "diff" },
   });
-  console.log("diff", response);
   // @ts-expect-error - response.data is a string
   return response.data;
 }
@@ -62,8 +61,6 @@ async function analyzeCode(
   parsedDiff: File[]
 ): Promise<Array<{ body: string; path: string; line: number }>> {
   const comments: Array<{ body: string; path: string; line: number }> = [];
-
-  console.log("parsedDiff", parsedDiff);
 
   for (const file of parsedDiff) {
     if (file.to === "/dev/null") continue; // Ignore deleted files
@@ -262,7 +259,8 @@ async function main() {
   console.log("parsedDiff", parsedDiff);
 
   const filteredDiff = parsedDiff.filter((file) => {
-    return minimatch(file.to ?? "", ".mdx");
+    console.log("file.to", file.to);
+    return /.mdx$/.test(file.to ?? "");
   });
 
   console.log("filteredDiff", filteredDiff);
