@@ -4,6 +4,7 @@ import OpenAI from "openai";
 // eslint-disable-next-line import/no-unresolved
 import { Octokit } from "@octokit/rest";
 import parseDiff, { Chunk, File } from "parse-diff";
+import { analyzeArticle } from "./analyzeArticle";
 
 const GITHUB_TOKEN: string = process.env.GITHUB_TOKEN as string; // core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = process.env.OPENAI_API_KEY as string; // core.getInput("OPENAI_API_KEY");
@@ -56,7 +57,7 @@ async function getDiff(
   return response.data;
 }
 
-async function analyzeCode(
+async function analyzePR(
   parsedDiff: File[]
 ): Promise<Array<{ body: string; path: string; line: number }>> {
   const comments: Array<{ body: string; path: string; line: number }> = [];
@@ -64,145 +65,23 @@ async function analyzeCode(
   for (const file of parsedDiff) {
     if (file.to === "/dev/null") continue; // Ignore deleted files
     for (const chunk of file.chunks) {
-      const prompt = createPrompt(file, chunk);
-      const aiResponse = await getAIResponse(prompt, chunk, file.to!);
-      if (aiResponse) {
-        comments.push(...aiResponse);
-      }
-    }
-  }
-  return comments;
-}
-
-function createPrompt(file: File, chunk: Chunk): string {
-  return `Your task is to review pull requests on Marmelab technical blog. Instructions:
-- Do not explain what you're doing.
-- Provide the response in following JSON format (with no wrapping):
-
-  [
-    {
-      "comment": "<comment targetting one line>",
-      "originalText": "<The line to be replaced by the suggestion>",
-      "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
-    }
-  ]
-
-- Propose change to text and code.
-- Fix typo, grammar and orthograph
-- ensure short sentence
-- ensure one idea per sentence
-- simplify complex sentence.
-
-Git diff of the article to review:
-
-\`\`\`diff
-${chunk.content}
-${chunk.changes
-  // @ts-expect-error - ln and ln2 exists where needed
-  .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
-  .join("\n")}
-\`\`\`
-`;
-}
-
-async function getAIResponse(
-  prompt: string,
-  chunk: Chunk,
-  path: string
-): Promise<
-  {
-    line: number;
-    path: string;
-    body: string;
-  }[]
-> {
-  const article = `${chunk.content}
+      const diff = `${chunk.content}
 ${chunk.changes
   // @ts-expect-error - ln and ln2 exists where needed
   .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
   .join("\n")}`;
-
-  const queryConfig = {
-    model: OPENAI_API_MODEL,
-    temperature: 0.2,
-    max_tokens: 700,
-    top_p: 1,
-    frequency_penalty: 0,
-    presence_penalty: 0,
-  };
-
-  try {
-    const response = await openai.chat.completions.create({
-      ...queryConfig,
-      // return JSON if the model supports it:
-      ...(OPENAI_API_MODEL === "gpt-4-1106-preview"
-        ? { response_format: { type: "json_object" } }
-        : {}),
-      messages: [
-        {
-          role: "system",
-          content: prompt,
-        },
-      ],
-    });
-
-    const res = response.choices[0].message?.content?.trim() || "[]";
-    const result = JSON.parse(res);
-
-    const articleLines = article
-      .split("\n")
-      .map((line, index) => ({ text: line, number: index + 1 }));
-
-    const resultWithLineNumber = result.map((item: any) => {
-      const originalLine = item.originalText;
-
-      if (!item.originalText) {
-        console.error(`Incorrect originalText in item ${JSON.stringify(item)}`);
-        return item;
+      const newComments = await analyzeArticle({
+        apiKey: OPENAI_API_KEY,
+        diff,
+        model: OPENAI_API_MODEL,
+        path: file.to!,
+      });
+      if (newComments && newComments.length > 0) {
+        comments.push(...newComments);
       }
-
-      const position = articleLines.find(({ text }) =>
-        text.includes(originalLine)
-      )?.number;
-
-      if (!position) {
-        console.error(
-          `Could not find position for item ${JSON.stringify(item)}`
-        );
-        return item;
-      }
-
-      return {
-        ...item,
-        position,
-      };
-    });
-
-    const comments: {
-      line: number;
-      path: string;
-      body: string;
-    }[] = resultWithLineNumber
-      .filter(({ position }: any) => position !== undefined)
-      .map((item: any) => ({
-        line: item.position,
-        path,
-        body: `${item.comment}
-      ${
-        item.suggestion &&
-        `
-      \`\`\`suggestion
-      ${item.suggestion}
-      \`\`\``
-      }
-      `,
-      }));
-
-    return comments;
-  } catch (error) {
-    console.error("Error:", error);
-    return [];
+    }
   }
+  return comments;
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -242,7 +121,7 @@ async function main() {
 
   console.log("filteredDiff", filteredDiff);
 
-  const comments = await analyzeCode(filteredDiff);
+  const comments = await analyzePR(filteredDiff);
   console.log("comments:", comments);
   if (comments.length > 0) {
     await createReviewComment(

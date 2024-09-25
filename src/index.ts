@@ -1,9 +1,14 @@
 import fs from "fs";
 import path from "path";
-import { getComments } from "./getReviewComments";
+import { analyzeArticle } from "./analyzeArticle";
 
 const article = fs
   .readFileSync(path.resolve(__dirname, "./article.diff"))
   .toString();
 
-getComments(article).then(console.log);
+analyzeArticle({
+  diff: article,
+  path: "article.md",
+  model: "gpt-3.5-turbo",
+  apiKey: process.env.OPENAI_API_KEY as string,
+}).then(console.log);
