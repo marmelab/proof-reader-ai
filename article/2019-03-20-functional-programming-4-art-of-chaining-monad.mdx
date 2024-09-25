@@ -1,0 +1,244 @@
+---
+layout: post
+title: "Functional Programming in JavaScript, Part 4: The Art of Chaining Different Monads"
+excerpt: "It is a bad practice to chain one monad with a monad of another type. Read on to understand why, and how to chain monads the right way."
+thumbnail_image: ../../static/images/blog/legomovie-duplo-aliens-small.jpg
+cover_image: ../../static/images/blog/legomovie-duplo-aliens-big.jpg
+authors:
+  - thiery
+tags:
+  - functional-programming
+  - js
+  - tutorial
+---
+
+This is part 4 in a series on Functional Programming in JavaScript
+
+- [Part 1: The Unit](/blog/2018/03/14/functional-programming-1-unit-of-code.html)
+- [Part 2: The Monoid](/blog/2018/04/18/functional-programming-2-monoid.html)
+- [Part 3: Introduction to Functors and Monads](/blog/2018/09/26/functional-programming-3-functor-redone.html)
+
+## Recap: Functors and Monads
+
+In the last part, we explored functors and monads. A functor is essentially an object that allows you to apply a function to a value without unwrapping it. For example, rather than passing a value through a list of functions, you can apply those functions to the value while it remains encapsulated in the functor. This abstraction helps manage types and errors without explicit checks.
+
+Each functor has its unique behavior—whether it’s type checking with TypeBox, null checking with Maybe, or error handling with Either.
+
+We also encountered a problem: mapping a function that returns another functor leads to nested functors, making it difficult to access the final value. To resolve this, we introduced the chain method and explored the concept of monads, a type of functor that allows flattening.
+
+For instance, we can chain a Maybe monad with an Either monad like so:
+
+<Iframe src="//codepen.io/thierymichel/embed/QBEYzv/?height=265&theme-id=0&default-tab=js" />
+
+While this works, it's not the correct approach.
+
+## Flattening Monads, The Wrong Way
+
+Let's look again at the end of the example:
+
+```jsthen
+    .chain(mail => validateMail(mail).catch(error => error.message))
+    .getOrElse("no mail");
+```
+
+In detail:
+
+```js
+// Here we have a user or nothing.
+// If we have nothing, all the following lines will be ignored until `getOrElse`,
+// that gets the value or a default one.
+Maybe(user)
+  // We access the user mail, and now we have the mail or nothing.
+  // Again if we have nothing we will skip until `getOrElse`.
+  .map(get("mail"))
+  // And now we chain `validateMail` that takes a string and returns an *either*:
+  //  - `Right(mail)` if the string was an email
+  //  - `Left(new Error('Invalid mail'))` otherwise.
+  .chain((mail) => validateMail(mail).catch((error) => error.message));
+```
+
+Up to there it's cool, we know whether we have a mail or not.
+
+But then we use `.catch()`, which turns the eventual _left_ into a _right_. After this, no matter if the mail is valid or not, we have a _right_ holding a string either way. And even if we did not catch, then once the chain resolves and the _either_ gets flattened with the _maybe_, we would get `Nothing()` or `Maybe(mail)` or `Maybe(new Error('Invalid mail'))`.
+
+In other words, the result of the `chain` call is the value from the _either_, not an _either_. We have no way of knowing if it was a result or an error. When we flatten a _maybe_ with an _either_, we lose the context of the _either_.
+
+```js
+Maybe(Right("bar@example.com")).flatten(); // Maybe('bar@example.com')
+Maybe(Left(new Error("Invalid mail"))).flatten(); // Maybe(new Error('Invalid mail'))
+```
+
+The current `chain()` implemntation, when given monads of two different types, returns a monad of the first type. And that is the main issue when we flatten different kind of _Monads_ together.
+
+![That's not the way](/images/blog/lego-pyramide.jpg)
+
+**Update 11/2019**: Now there is something really important I totally forgot to tell you in the first version of this article.
+The previous implementation of flatten is wrong:
+It tries to do too much.
+It extracts the value of the nested monad and puts it in a new monad of the parent type.
+This is what allows to chain different monads together in simple cases.
+But as I told you, we should never do that.
+
+For example the _Right_ implementation should become:
+
+```diff
+const Right = value => ({
+  map: fn => Right(fn(value)),
+-  flatten: () => Right(value.value),
++  flatten: () => value,
+-  chain(fn) {
+-    return Right(this.map(fn).flatten());then
+-  },
++  chain(fn) {
++    return this.map(fn).flatten();
++  },
+  catch: fn => Right(value),
+  value,
+});
+```
+
+That's right, `flatten` simply returns the nested value. And `chain` is just a `map` followed by a `flatten`.
+No need to know how to extract the value of the nested Monad, we simply need to return it.
+
+With this change, the previous code would not work anymore, since the Monad type would change midway.
+Which is fine since we should not have tried to flatten two _monads_ of different type anyway.
+
+So how do we proceed ?
+
+### How To Use Different Kinds of Monads Together?
+
+So we should not flatten two different _monads_ (like a _maybe_ and an _either_) together. But we sure can flatten two _monads_ of the same kind. Hence, if we have a `Maybe(Either(value))`, and if we can somehow turn it into a `Maybe(Maybe(value))`, then we can flatten the two _Maybes_. We need a function called `eitherToMaybe`:
+
+```js
+Maybe({
+  name: "foo",
+  mail: "bar@example.com",
+})
+  .map((v) => v.mail)
+  .map(validateMail)
+  .map(eitherToMaybe)
+  .flatten();
+```
+
+or shorter :
+
+```js
+Maybe({
+  name: "foo",
+  mail: "bar@example.com",
+})
+  .map((v) => v.mail)
+  .map(validateMail)
+  .chain(eitherToMaybe);
+// to chain is the shorthand for map + flatten
+```
+
+Ok, but how does `eitherToMaybe` work?
+
+Well, what we want is a function that takes an _either_ and returns a _maybe_. Since we know what we convert, it is easy to convert the context, too.
+
+If _either_ is a `Right(value)`, then we return a `Maybe(value)`
+
+```js
+eitherToMaybe(Right("bar@example.com")); // Maybe('bar@example.com')
+```
+
+If _either_ is a `Left(error)`, then we return `Nothing()`. We do not keep the error, because _Maybe_ can only tell us if we a have a value or not.
+
+```js
+eitherToMaybe(Left("Invalid mail")); // Nothing()
+```
+
+Here is the implementation:
+
+```js
+const eitherToMaybe = (either) => Maybe(either.catch((e) => null).flatten());
+```
+
+And now:
+
+```js
+Maybe({
+  name: "foo",
+  mail: "bar@example.com",
+})
+  .map((v) => v.mail)
+  .map(validateMail)
+  .chain(eitherToMaybe);
+// returns
+Maybe("bar@example.com");
+
+Maybe({
+  name: "foo",
+  mail: "bar",
+})
+  .map((v) => v.mail)
+  .map(validateMail)
+  .chain(eitherToMaybe);
+// returns
+Maybe.Nothing();
+```
+
+Let's now see how we would do the opposite conversion, converting a _maybe_ to an _either_.
+
+If the _maybe_ holds a value, then we convert it to a _right_.
+
+```js
+maybeToEither(Maybe("some value")); // Right('some value')
+```
+
+But if the _maybe_ is _Nothing_, then we convert it to a _left_ with a message indicating that there is no value.
+
+```js
+maybeToEither(Maybe.Nothing()); // Left('no value')
+```
+
+And so here is the `maybeToEither` implementation:
+
+```js
+const maybeToEither = (maybe) =>
+  maybe.isNothing() ? Left("no value") : Right(maybe.flatten());
+```
+
+And now the context gets preserved: We have no value.
+
+![That's how you do it](/images/blog/lego-mixed-construct.jpg)
+
+This technique is called a _Natural Transformation_. A Natural Transformation is a Transformation that changes the container without changing the value. Think of it as a type conversion but for `Monad`.
+
+With natural transformations, the order doesn't matter. You can change the value, then naturally transform the container, it will be the same as if you first convert, then transform the value.
+
+```js
+Either(5)
+  .chain(eitherToMaybe)
+  .map((v) => v * 2); // Maybe(10)
+Either(5)
+  .map((v) => v * 2)
+  .chain(eitherToMaybe); // Maybe(10)
+```
+
+Here is the corrected example from the previous article:
+
+<iframe
+  height="265"
+  style="width: 100%;"
+  scrolling="no"
+  title="Corrected Simple monad"
+  src="https://codepen.io/thierymichel/embed/KKKjYgG?height=265&theme-id=default&default-tab=js,result"
+  frameborder="no"
+  allowtransparency="true"
+  allowfullscreen="true"
+>
+  See the Pen{" "}
+  <a href="https://codepen.io/thierymichel/pen/KKKjYgG">
+    Corrected Simple monad
+  </a>{" "}
+  by ThieryMichel (<a href="https://codepen.io/thierymichel">@thierymichel</a>)
+  on <a href="https://codepen.io">CodePen</a>.
+</iframe>
+
+## Conclusion
+
+Every _Monad_ should offer functions to convert it toward other types of _Monad_. If not, it's rather simple to add your own.
+
+So this is how you chain different _monads_ together. You use converters function to transform the nested _monad_ to be the same type as its parent. And then you can safely flatten the two.
