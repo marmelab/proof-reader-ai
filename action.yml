@@ -1,0 +1,127 @@
+name: Code Review Github Action
+author: Frank Chen (@fxchen)
+description: "Improve your pull requests and code base with AI-assisted code reviews"
+inputs:
+  github-token:
+    description: "The token used to authenticate with the GitHub API"
+    required: false
+    default: ${{ github.token }}
+  openai-key:
+    description: "The OpenAI API key"
+    required: true
+  model:
+    description: "The OpenAI or Anthropic language model to use for code review"
+    required: false
+    default: "gpt-3.5-turbo-16k"
+  persona:
+    description: "The persona to use in the prompt (developer, kent_beck, marc_benioff, yoda)"
+    required: false
+    default: "kent_beck"
+  style:
+    description: "The style of output to use (concise, zen)"
+    required: false
+    default: "concise"
+  include-full-files:
+    description: "Whether to include full files in addition to the diff (true or false)"
+    required: false
+    default: "false"
+  post-if-error:
+    description: "Whether to post a comment if there was an error"
+    required: false
+    default: "false"
+
+outputs:
+  results:
+    description: "Code review results (experimental)"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install Dependencies
+      run: pip install -r ${{ github.action_path }}/requirements.txt
+      shell: bash
+    - name: Get common ancestor for branch point
+      id: first_commit
+      run: |
+        # Find the common ancestor of the base branch and the head branch
+        common_ancestor=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+        echo "sha=$common_ancestor" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Prepare excluded files
+      id: prepare_exclude
+      run: |
+        exclude_flags=${{ inputs.exclude-files }}
+        IFS=', ' read -r -a exclude_array <<< "$exclude_flags"
+        exclude_str=""
+        for index in "${!exclude_array[@]}"
+        do
+            exclude_str+="':!${exclude_array[index]}' "
+        done
+        echo "exclude_files=$exclude_str" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Run git diff
+      id: git_diff
+      run: |
+        source $GITHUB_OUTPUT
+        git diff --merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- . ${{ steps.prepare_exclude.outputs.exclude_files }} > diff.txt
+      shell: bash
+    - name: Get git diff
+      id: print_diff
+      run: |
+        echo "::set-output name=diff::$(cat diff.txt)"
+      shell: bash
+    - name: Print diff
+      run: echo "${{ steps.print_diff.outputs.diff }}"
+      shell: bash
+    - name: Run OpenAI code review
+      id: openai
+      run: |
+        cat diff.txt | python ${{ github.action_path }}/actionCodeReview.js > review.txt
+        echo 'reviewresult<<EOF' >> $GITHUB_OUTPUT
+        echo "$(cat review.txt)" >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        OPENAI_API_KEY: ${{ inputs.openai-key }}
+        MODEL: ${{ inputs.model }}
+        PERSONA: ${{ inputs.persona }}
+        STYLE: ${{ inputs.style }}
+        INCLUDE_FILES: ${{ inputs.include-full-files }}
+        COMMIT_TITLE: ${{ github.event.pull_request.title }}
+        COMMIT_BODY: ${{ github.event.pull_request.body }}
+
+    - name: Show output in case of failure
+      id: err-output
+      if: failure()
+      run: |
+        echo 'errorresult<<EOF' >> $GITHUB_OUTPUT
+        echo "ERROR: $(cat review.txt)" >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+        echo "Review result and error: $(cat review.txt)"
+      shell: bash
+
+    - name: Create comment
+      if: success() || (inputs.post-if-error && inputs.post-if-error != 'false')
+      uses: peter-evans/create-or-update-comment@v3
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          # Review:
+          ${{ steps.openai.outputs.reviewresult && steps.openai.outputs.reviewresult || steps.err-output.outputs.errorresult }}
+
+branding:
+  icon: "user-check"
+  color: "green"

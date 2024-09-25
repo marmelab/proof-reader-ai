@@ -23,7 +23,7 @@
 +It allows to handle, null value, error, asynchronous code, with pure function.
 +Perhaps you searched a definition, and then you most certainly did not understand anything about it. I mean seriously :
 +
-+> A monad is a construction that, given an underlying type system, embeds a corresponding type system into it. This monadic type system preserves all significant aspects of the underlying type system, while adding features particular to the monad.
++> A monad is a construction dfsdfsdre that, given an underlying type system, embeds a corresponding type system into it. This monadic type system preserves all significant aspects of the underlying type system, while adding features particular to the monad.
 +
 +> A monad is just a monoid in the category of endofunctors.
 +
