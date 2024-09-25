@@ -280,7 +280,7 @@ async function main() {
   const parsedDiff = parseDiff(diff);
 
   const filteredDiff = parsedDiff.filter((file) => {
-    return minimatch(file.to ?? "", ".md");
+    return minimatch(file.to ?? "", ".mdx");
   });
 
   const comments = await analyzeCode(filteredDiff);
