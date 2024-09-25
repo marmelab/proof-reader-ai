@@ -53,6 +53,7 @@ async function getDiff(
     pull_number,
     mediaType: { format: "diff" },
   });
+  console.log("diff", response);
   // @ts-expect-error - response.data is a string
   return response.data;
 }
@@ -61,6 +62,8 @@ async function analyzeCode(
   parsedDiff: File[]
 ): Promise<Array<{ body: string; path: string; line: number }>> {
   const comments: Array<{ body: string; path: string; line: number }> = [];
+
+  console.log("parsedDiff", parsedDiff);
 
   for (const file of parsedDiff) {
     if (file.to === "/dev/null") continue; // Ignore deleted files
@@ -131,6 +134,7 @@ ${chunk.changes
     presence_penalty: 0,
   };
 
+  console.log("prompt:", prompt);
   try {
     const response = await openai.chat.completions.create({
       ...queryConfig,
@@ -145,6 +149,8 @@ ${chunk.changes
         },
       ],
     });
+
+    console.log("openAPI:", response);
 
     const res = response.choices[0].message?.content?.trim() || "[]";
     const result = JSON.parse(res);
@@ -253,13 +259,16 @@ async function main() {
   }
 
   const parsedDiff = parseDiff(diff);
+  console.log("parsedDiff", parsedDiff);
 
   const filteredDiff = parsedDiff.filter((file) => {
     return minimatch(file.to ?? "", ".mdx");
   });
 
+  console.log("filteredDiff", filteredDiff);
+
   const comments = await analyzeCode(filteredDiff);
-  console.log({ comments });
+  console.log("comments:", comments);
   if (comments.length > 0) {
     await createReviewComment(
       prDetails.owner,
