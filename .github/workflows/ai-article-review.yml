@@ -20,7 +20,7 @@ jobs:
           cache: npm
 
       - name: 📥 Download deps
-        run: make install
+        run: yarn
 
       - name: AI Code Reviewer
         run: yarn review-article
