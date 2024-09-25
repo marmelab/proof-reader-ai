@@ -4,11 +4,13 @@ import OpenAI from "openai";
 // eslint-disable-next-line import/no-unresolved
 import { Octokit } from "@octokit/rest";
 import parseDiff, { Chunk, File } from "parse-diff";
-import { minimatch } from "minimatch";
 
-const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
-const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
-const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL");
+const GITHUB_TOKEN: string = process.env.GITHUB_TOKEN as string; // core.getInput("GITHUB_TOKEN");
+const OPENAI_API_KEY: string = process.env.OPENAI_API_KEY as string; // core.getInput("OPENAI_API_KEY");
+console.log({ GITHUB_TOKEN });
+const OPENAI_API_MODEL: string = "gpt-3.5-turbo";
+
+console.log({ OPENAI_API_KEY });
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
@@ -147,17 +149,16 @@ ${chunk.changes
       ],
     });
 
-    console.log("openAPI:", response);
-
     const res = response.choices[0].message?.content?.trim() || "[]";
     const result = JSON.parse(res);
+    console.log("openAPI:", result);
 
     const articleLines = article
       .split("\n")
       .map((line, index) => ({ text: line, number: index + 1 }));
 
     const resultWithLineNumber = result.map((item: any) => {
-      const originalLine = item.originalText?.split("\n");
+      const originalLine = item.originalText;
 
       if (!item.originalText) {
         console.error(`Incorrect originalText in item ${JSON.stringify(item)}`);
@@ -180,6 +181,8 @@ ${chunk.changes
         position,
       };
     });
+
+    console.log("resultWithLineNumber", resultWithLineNumber);
 
     const comments = resultWithLineNumber
       .filter(({ position }: any) => position !== undefined)
@@ -243,9 +246,6 @@ async function createReviewComment(
 async function main() {
   const prDetails = await getPRDetails();
   let diff: string | null;
-  const eventData = JSON.parse(
-    readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
-  );
 
   diff = await getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
 
