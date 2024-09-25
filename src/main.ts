@@ -284,6 +284,7 @@ async function main() {
   });
 
   const comments = await analyzeCode(filteredDiff);
+  console.log({ comments });
   if (comments.length > 0) {
     await createReviewComment(
       prDetails.owner,
