@@ -1,0 +1,49 @@
++---
++layout: post
++title: "Functional programming in js - 1 The unit"
++excerpt: "Let's first talk about the unit in functional programming: aka the function"
++image: /images/blog/lego-title-big.jpg
++image370x240_5: /images/blog/lego-title-small.jpg
++image1024x395: /images/blog/lego-title-big.jpg
++authors:
++  - thiery
++tags:
++  - functional programming
++  - pure function
++  - curry
++  - composition
++---
++
++This is the first article in a series on functional programming.
++
++In this series I will talk about functional programming in javascript: pure function, composition, curry, monoid, functor, etc... And I will even try to work my way toward the ellusive `monad`.
++
++You probably heard the term associated with functional programming.
++Apparently, a lot of thing ressemble monad: promise, array, observable.
++It allows to handle, null value, error, asynchronous code, with pure function.
++Perhaps you searched a definition, and then you most certainly did not understand anything about it. I mean seriously :
++
++> A monad is a construction that, given an underlying type system, embeds a corresponding type system into it. This monadic type system preserves all significant aspects of the underlying type system, while adding features particular to the monad.
++
++> A monad is just a monoid in the category of endofunctors.
++
++![I am so dizzy](/images/blog/lego-dizzy.gif)
++
++Let's take a deep breath and forget about those weird definition. For now I will just say that the monad is a pattern in functional programming.
++
++But before we can see what pattern it is, let's first introduce functional programming.
++
++Functional programming is a programming paradigm that is declarative. You describe what you want. As opposed with imperative programming, where you say what you want the computer to do.
++More precisely, in true functional programming, you do not have control flow.
++No `for`, `while`, `if`, `try`, `throw` or `catch`. Or at least, for language like javascript, they get hidden.
++Instead of `for` or `while`, we use `Array.map` or `Array.reduce`.
++Instead of `if` we use ternary if `condition ? true statement : false statement`.
++And instead of throwing error we return them as result.
++Also, functional programming forbid side effect. And enforce immutability. (to be more precise functional programming can have side effect, but it get isolated from the rest of the code)
++
++> Why bother with functional programming? Why not use side effect and mutate all we want?
++
++Because, having code without side effect not mutation allow to have clearly defined function that are previsible, does not depends on context, never throw error, and always return the same result given the same input.
++Are you not tired to encompass every function call into a try catch, or to hunt bug in a function that come from a side effect in another function elsewhere ?
++
++I will start with the basic, litteraly, by first talking about the unit of code in functional programming, aka the function.
