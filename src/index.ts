@@ -1,12 +1,12 @@
 import fs from "fs";
 import path from "path";
-import { analyzeArticle } from "./analyzeArticle";
+import { generateAICommentsForDiff } from "./generateAICommentsForMarkdownFiles";
 
 const article = fs
   .readFileSync(path.resolve(__dirname, "./article.diff"))
   .toString();
 
-analyzeArticle({
+generateAICommentsForDiff({
   diff: article,
   path: "article.md",
   model: "gpt-3.5-turbo",

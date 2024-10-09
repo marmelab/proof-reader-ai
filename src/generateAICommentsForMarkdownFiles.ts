@@ -1,3 +1,4 @@
+import parseDiff, { File } from "parse-diff";
 import OpenAI from "openai";
 
 function createPrompt(diff: string): string {
@@ -90,7 +91,7 @@ async function getAIResponse(
   }
 }
 
-export async function analyzeArticle({
+export async function generateAICommentsForDiff({
   diff,
   path,
   apiKey,
@@ -104,4 +105,37 @@ export async function analyzeArticle({
   const prompt = createPrompt(diff);
   const aiResponse = await getAIResponse(prompt, model, apiKey);
   return await getComments(aiResponse, path);
+}
+
+export async function generateAICommentsForMarkdownFiles({
+  parsedDiff,
+  apiKey,
+  model,
+}: {
+  parsedDiff: File[];
+  apiKey: string;
+  model: string;
+}): Promise<Array<{ body: string; path: string; line: number }>> {
+  const comments: Array<{ body: string; path: string; line: number }> = [];
+
+  for (const file of parsedDiff) {
+    if (file.to === "/dev/null") continue; // Ignore deleted files
+    for (const chunk of file.chunks) {
+      const diff = `${chunk.content}
+  ${chunk.changes
+    // @ts-expect-error - ln and ln2 exists where needed
+    .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+    .join("\n")}`;
+      const newComments = await generateAICommentsForDiff({
+        apiKey,
+        diff,
+        model,
+        path: file.to!,
+      });
+      if (newComments && newComments.length > 0) {
+        comments.push(...newComments);
+      }
+    }
+  }
+  return comments;
 }
