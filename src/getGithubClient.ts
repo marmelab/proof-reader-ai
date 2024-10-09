@@ -5,8 +5,6 @@ interface PRDetails {
   owner: string;
   repo: string;
   pull_number: number;
-  title: string;
-  description: string;
 }
 
 export const getGithubClient = (githubToken: string) => {
@@ -16,17 +14,10 @@ export const getGithubClient = (githubToken: string) => {
     const { repository, number } = JSON.parse(
       readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8")
     );
-    const prResponse = await octokit.pulls.get({
-      owner: repository.owner.login,
-      repo: repository.name,
-      pull_number: number,
-    });
     return {
       owner: repository.owner.login,
       repo: repository.name,
       pull_number: number,
-      title: prResponse.data.title ?? "",
-      description: prResponse.data.body ?? "",
     };
   }
 

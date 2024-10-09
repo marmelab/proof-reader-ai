@@ -3,33 +3,32 @@ import OpenAI from "openai";
 
 function createPrompt(diff: string): string {
   return `Your task is to review pull requests on a technical blog. Instructions:
-  - Do not explain what you're doing.
-  - Provide the response in following JSON format, And return only the json:
-  
-  [
-      {
-          "comment": "<comment targeting one line>",
-          "lineNumber": <line_number>,
-          "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
-      }
-  ]
+- Do not explain what you're doing.
+- Provide the response in following JSON format, And return only the json:
 
-  - returned result must only contains valid json
-  - Propose change to text and code.
-  - Fix typo, grammar and spelling
-  - ensure short sentence
-  - ensure one idea per sentence
-  - simplify complex sentence.
-  - No more than one comment per line
-  - One comment can address several issues
-  - Provide comments and suggestions ONLY if there is something to improve or fix, otherwise return an empty array.
-  
-  Git diff of the article to review:
-  
-  \`\`\`diff
-  ${diff}
-  \`\`\`
-  `;
+[
+    {
+        "comment": "<comment targeting one line>",
+        "lineNumber": <line_number>,
+        "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
+    }
+]
+
+- returned result must only contains valid json
+- Propose change to text and code.
+- Fix typo, grammar and spelling
+- ensure short sentence
+- ensure one idea per sentence
+- simplify complex sentence.
+- No more than one comment per line
+- One comment can address several issues
+- Provide comments and suggestions ONLY if there is something to improve or fix, otherwise return an empty array.
+
+Git diff of the article to review:
+
+\`\`\`diff
+${diff}
+\`\`\``;
 }
 export const getComments = async (
   result: { lineNumber: number; comment: string; suggestion: string }[],
