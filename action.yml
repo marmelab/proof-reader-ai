@@ -1,4 +1,4 @@
-name: "AI Article Blog Review Action"
+name: "Proof Reader AI Action"
 description: "Perform code reviews and comment on diffs on markdown article using OpenAI API."
 inputs:
   GITHUB_TOKEN:
