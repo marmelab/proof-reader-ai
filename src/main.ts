@@ -34,7 +34,6 @@ async function main() {
     model: OPENAI_API_MODEL,
   });
 
-  console.log("comments:", comments);
   if (comments.length > 0) {
     await githubCli.createReviewComment(
       prDetails.owner,

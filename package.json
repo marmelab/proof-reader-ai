@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx --env-file=./.env.local ./src/index.ts",
+    "analyzeSampleDiff": "tsx --env-file=./.env.local ./scripts/analyzeSampleDiff.ts",
     "build": "tsc",
     "review-article": "tsx ./lib/main.js"
   },
