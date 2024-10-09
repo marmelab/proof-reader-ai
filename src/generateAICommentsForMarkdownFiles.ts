@@ -83,7 +83,7 @@ async function getAIResponse(
     });
 
     const res = response.choices[0].message?.content?.trim() || "[]";
-    return JSON.parse(res);
+    return JSON.parse(res.replace(/^```json/g, "").replace(/```$/g, ""));
   } catch (error) {
     console.error("Error:", error);
     return [];
