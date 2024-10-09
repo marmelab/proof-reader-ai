@@ -70,10 +70,6 @@ async function getAIResponse(
   try {
     const response = await openai.chat.completions.create({
       ...queryConfig,
-      // return JSON if the model supports it:
-      ...(model === "gpt-4-1106-preview"
-        ? { response_format: { type: "json_object" } }
-        : {}),
       messages: [
         {
           role: "system",
@@ -82,8 +78,18 @@ async function getAIResponse(
       ],
     });
 
-    const res = response.choices[0].message?.content?.trim() || "[]";
-    return JSON.parse(res.replace(/^```json/g, "").replace(/```$/g, ""));
+    const res =
+      response.choices[0].message?.content
+        ?.trim()
+        .replace(/^```json/g, "")
+        .replace(/```$/g, "") || "[]";
+
+    try {
+      return JSON.parse(res);
+    } catch (error) {
+      console.log("Could not parse the prompt result:", res);
+      return [];
+    }
   } catch (error) {
     console.error("Error:", error);
     return [];
