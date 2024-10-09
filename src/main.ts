@@ -1,20 +1,13 @@
 import { readFileSync } from "fs";
-import * as core from "@actions/core";
-import OpenAI from "openai";
-// eslint-disable-next-line import/no-unresolved
 import { Octokit } from "@octokit/rest";
-import parseDiff, { Chunk, File } from "parse-diff";
+import parseDiff, { File } from "parse-diff";
 import { analyzeArticle } from "./analyzeArticle";
 
-const GITHUB_TOKEN: string = process.env.GITHUB_TOKEN as string; // core.getInput("GITHUB_TOKEN");
-const OPENAI_API_KEY: string = process.env.OPENAI_API_KEY as string; // core.getInput("OPENAI_API_KEY");
-const OPENAI_API_MODEL: string = "gpt-3.5-turbo";
+const GITHUB_TOKEN: string = process.env.GITHUB_TOKEN as string;
+const OPENAI_API_KEY: string = process.env.OPENAI_API_KEY as string;
+const OPENAI_API_MODEL: string = process.env.OPENAI_API_MODEL as string;
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
-
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
 
 interface PRDetails {
   owner: string;
@@ -84,7 +77,6 @@ ${chunk.changes
   return comments;
 }
 
-// eslint-disable-next-line no-unused-vars
 async function createReviewComment(
   owner: string,
   repo: string,
