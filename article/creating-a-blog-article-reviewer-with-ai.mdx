@@ -1,0 +1,159 @@
+---
+layout: post
+title: "Creating a reviewer for article using OpenAI"
+excerpt: ""
+thumbnail_image: ../../static/images/blog/...
+cover_image: ../../static/images/blog/...
+authors:
+  - thiery
+tags:
+---
+
+At Marmelab we write a lot of blog article, and reviewing and improving them take time.
+Ai like chatgpt, are great to improve text, so what if we created an A.I. bot that would review article.
+We write our blog article by opening pull request on the blog repository. So what if we had a github actions that would review our article using OpenAI.
+
+The first order of business is to call OpenAI with the article content and the right prompt. I would integrate with github as a second step.
+
+Calling the OpenAi API is straightforward thanks to the [openai](https://github.com/openai/openai-node) package. Just follow the README.
+Finding the right prompt however was another matter entirely.
+
+## The quest for the good prompt
+
+I will not run you through all the different version of the prompt, instead here is the lesson I learned:
+
+### The AI love to explain what it does
+
+The AI being created as an agent love to talk, but in my case I just wanted the result. So the instruction `Do not explain what you are doing` is invaluable.
+
+### The AI can generate json rather reliably if you ask correctly
+
+You can have the AI format its response in json reliably, by providing a template.
+
+```json
+[
+    {
+        "comment": "<comment targeting one line>",
+        "lineNumber": <line_number>,
+        "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
+    }
+]
+```
+
+Note it tends to wrap the result in a `\`\`\`json` tag, even when you tell it not to.
+
+### The AI does not know how to count
+
+At first I passed the article directly, and got back an array of comments. But the lineNumber were wrong. They were ofter bigger than the size of the text.
+The funny things is that it was able to quote the line it targeted when asked to.
+In the end I added the lineNumber at the start of every line. As is the case in the github diff.
+But even like this it still get it wrong sometimes, albeit way more rarely.
+
+### The AI result is random
+
+It should be obvious, but I was still surprised, how the same prompt could get hugely different result. Sometime I still get answer not in json format at all.
+
+### The AI will want to do what you ask, even when there is nothing todo.
+
+When you add the AI to return an array of comment, it will return comments, even if there is nothing to improve. I had to tell him specifically to return nothing if there is nothing to say.
+
+The final prompt (for now)
+
+```
+Your task is to review pull requests on a technical blog. Instructions:
+  - Do not explain what you're doing.
+  - Provide the response in following JSON format, And return only the json:
+
+  [
+      {
+          "comment": "<comment targeting one line>",
+          "lineNumber": <line_number>,
+          "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
+      }
+  ]
+  - returned result must only contains valid json
+  - Propose change to text and code.
+  - Fix typo, grammar and spelling
+  - ensure short sentence
+  - ensure one idea per sentence
+  - simplify complex sentence.
+  - No more than one comment per line
+  - One comment can address several issues
+  - Provide comments and suggestions ONLY if there is something to improve or fix, otherwise return an empty array.
+
+  Git diff of the article to review:
+
+\`\`\`diff
+${diff}
+\`\`\`
+```
+
+## Integrating with github API
+
+To integrate with the github api in a github action I used [@octokit/rest](https://github.com/octokit/rest.js)
+For what I wanted I needed to:
+
+- retrieve the current pull request details
+- retrieve the diff
+- create the review
+
+### Retrieving the current pull request details
+
+To retrieve the pull request details in a github actions context, you must first execute the `actions/checkout@v3` action.
+Then using the GITHUB_EVENT_PATH environment variable, you can read the repository information with
+
+```ts
+const { repository, number } = JSON.parse(
+  readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8")
+);
+return {
+  owner: repository.owner.login,
+  repo: repository.name,
+  pull_number: number,
+};
+```
+
+### Retrieving the diff
+
+To retrieve the diff you can use `octokit.pulls.get`
+
+```ts
+const response = await octokit.pulls.get({
+  owner,
+  repo,
+  pull_number,
+  mediaType: { format: "diff" },
+});
+```
+
+### creating the review
+
+Finally after you have retrieved the comments using OpenAi you can create a code review with:
+
+```ts
+await octokit.pulls.createReview({
+  owner,
+  repo,
+  pull_number,
+  comments,
+  event: "COMMENT",
+});
+```
+
+A github comment is composed of line, path and body. I placed the comment and the suggestion in the body
+
+```ts
+body: `${item.comment}
+\`\`\`suggestion
+${item.suggestion}
+\`\`\``;
+```
+
+Following the same syntax as the one on the browser. Sadly the suggestion gets escaped by the API, and I ended up with the suggestion rendered as a snippet.
+![comment](soon)
+I did not found a way to add a true suggestion.
+
+## Conclusion
+
+Here is the repository of the github actions: [AI Article Reviewer](https://github.com/ThieryMichel/proof-reader-ai)
+The action has been published (add link once published) feel free to try it by following the README.
