@@ -15,20 +15,20 @@ We create blog articles by opening pull requests on the blog repository. What if
 
 The first step is to call OpenAI with the article content and the appropriate prompt. Integration with GitHub would be the next step.
 
-Calling the OpenAI API is simple with the openai package. Just follow the README instructions.
+Calling the OpenAI API is simple with the `openai` package. Just follow the README instructions.
 However, finding the right prompt proved to be a different challenge.
 
 ## The quest for the good prompt
 
-I will not run you through all the different version of the prompt, instead here is the lesson I learned:
+I will not run you through all the different versions of the prompt, instead here is the lesson I learned:
 
-### The AI love to explain what it does
+### The AI loves to explain what it does
 
-The AI being created as an agent love to talk, but in my case I just wanted the result. So the instruction `Do not explain what you are doing` is invaluable.
+The AI being created as an agent loves to talk, but I just wanted the result. So the instruction `Do not explain what you are doing` is invaluable.
 
-### The AI can generate json rather reliably if you ask correctly
+### The AI can generate JSON rather reliably if you ask correctly
 
-You can have the AI format its response in json reliably, by providing a template.
+You can have the AI format its response in JSON reliably, by providing a template.
 
 ```json
 [
@@ -44,18 +44,18 @@ Note it tends to wrap the result in a `\`\`\`json` tag, even when you tell it no
 
 ### The AI does not know how to count
 
-At first I passed the article directly, and got back an array of comments. But the lineNumber were wrong. They were ofter bigger than the size of the text.
-The funny things is that it was able to quote the line it targeted when asked to.
-In the end I added the lineNumber at the start of every line. As is the case in the github diff.
-But even like this it still get it wrong sometimes, albeit way more rarely.
+At first, I passed the article directly and got back an array of comments. But the line numbers were wrong. They were often bigger than the size of the text.
+The funny thing is that it was able to quote the line it targeted when asked to.
+In the end, I added the line number at the start of every line. As is the case in the GitHub diff.
+But even like this it still gets it wrong sometimes, albeit way more rarely.
 
 ### The AI result is random
 
 It should be obvious, but I was still surprised by how the same prompt could yield vastly different results.
 
-### The AI will want to do what you ask, even when there is nothing todo.
+### The AI will want to do what you ask, even when there is nothing to do.
 
-When you ask the AI to return an array of comments, it will do so even if there is nothing to improve. I had to specifically instruct it to return nothing if there are no suggestions.
+When you ask the AI to return an array of comments, it will do so even if there is nothing to improve. I had to specifically instruct it to return nothing if there were no suggestions.
 
 The final prompt (for now)
 
@@ -90,7 +90,7 @@ ${diff}
 
 ## Integrating with github API
 
-To integrate with the github api in a github action I used [@octokit/rest](https://github.com/octokit/rest.js)
+To integrate with the GitHub API in a GitHub action I used [@octokit/rest](https://github.com/octokit/rest.js)
 For what I wanted I needed to:
 
 - retrieve the current pull request details
@@ -99,7 +99,7 @@ For what I wanted I needed to:
 
 ### Retrieving the current pull request details
 
-To retrieve the pull request details in a github actions context, you must first execute the `actions/checkout@v3` action.
+To retrieve the pull request details in a GitHub actions context, you must first execute the `actions/checkout@v3` action.
 Then using the GITHUB_EVENT_PATH environment variable, you can read the repository information with
 
 ```ts
@@ -128,7 +128,7 @@ const response = await octokit.pulls.get({
 
 ### creating the review
 
-Finally after you have retrieved the comments using OpenAi you can create a code review with:
+Finally, after you have retrieved the comments using OpenAi you can create a code review with:
 
 ```ts
 await octokit.pulls.createReview({
@@ -140,7 +140,7 @@ await octokit.pulls.createReview({
 });
 ```
 
-A github comment is composed of line, path and body. I placed the comment and the suggestion in the body
+A GitHub comment is composed of a line, path, and body. I placed the comment and the suggestion in the body
 
 ```ts
 body: `${item.comment}
@@ -149,9 +149,9 @@ ${item.suggestion}
 \`\`\``;
 ```
 
-Careful to not keep any indentation as it could change the suggestion as a bloc quote.
+Be careful not to keep any indentation as it could change the suggestion to a block quote.
 
 ## Conclusion
 
-Here is the repository of the github actions: [AI Article Reviewer](https://github.com/ThieryMichel/proof-reader-ai)
-The action has been published (add link once published) feel free to try it by following the README.
+Here is the repository of the GitHub actions: [AI Article Reviewer](https://github.com/ThieryMichel/proof-reader-ai)
+The action has been published (add a link once published) feel free to try it by following the README.
