@@ -1,245 +1,160 @@
-@@ -0,0 +1,244 @@
-1 +---
-2 +layout: post
-3 +title: "Functional Programming in JavaScript, Part 4: The Art of Chaining Different Monads"
-4 +excerpt: "It is a bad practice to chain one monad with a monad of another type. Read on to understand why, and how to chain monads the right way."
-5 +thumbnail_image: ../../static/images/blog/legomovie-duplo-aliens-small.jpg
-6 +cover_image: ../../static/images/blog/legomovie-duplo-aliens-big.jpg
-7 +authors:
-8 +  - thiery
-9 +tags:
-10 +  - functional-programming
-11 +  - js
-12 +  - tutorial
-13 +---
-14 +
-15 +This is part 4 in a series on Functional Programming in JavaScript
-16 +
-17 +- [Part 1: The Unit](/blog/2018/03/14/functional-programming-1-unit-of-code.html)
-18 +- [Part 2: The Monoid](/blog/2018/04/18/functional-programming-2-monoid.html)
-19 +- [Part 3: Introduction to Functors and Monads](/blog/2018/09/26/functional-programming-3-functor-redone.html)
+1 + ---
+2 + layout: post
+3 + title: "Creating a reviewer for article using OpenAI"
+4 + excerpt: ""
+5 + thumbnail_image: ../../static/images/blog/...
+6 + cover_image: ../../static/images/blog/...
+7 + authors:
+8 +   - thiery
+9 + tags:
+10 + ---
+11 +
+12 + At Marmelab we write a lot of blog article, and reviewing and improving them take time.
+13 + Ai like chatgpt, are great to improve text, so what if we created an A.I. bot that would review article.
+14 + We write our blog article by opening pull request on the blog repository. So what if we had a github actions that would review our article using OpenAI.
+15 +
+16 + The first order of business is to call OpenAI with the article content and the right prompt. I would integrate with github as a second step.
+17 +
+18 + Calling the OpenAi API is straightforward thanks to the [openai](https://github.com/openai/openai-node) package. Just follow the README.
+19 + Finding the right prompt however was another matter entirely.
 20 +
-21 +## Recap: Functors and Monads
+21 + ## The quest for the good prompt
 22 +
-23 +In the last part, we explored functors and monads. A functor is essentially an object that allows you to apply a function to a value without unwrapping it. For example, rather than passing a value through a list of functions, you can apply those functions to the value while it remains encapsulated in the functor. This abstraction helps manage types and errors without explicit checks.
+23 + I will not run you through all the different version of the prompt, instead here is the lesson I learned:
 24 +
-25 +Each functor has its unique behavior—whether it’s type checking with TypeBox, null checking with Maybe, or error handling with Either.
+25 + ### The AI love to explain what it does
 26 +
-27 +We also encountered a problem: mapping a function that returns another functor leads to nested functors, making it difficult to access the final value. To resolve this, we introduced the chain method and explored the concept of monads, a type of functor that allows flattening.
+27 + The AI being created as an agent love to talk, but in my case I just wanted the result. So the instruction `Do not explain what you are doing` is invaluable.
 28 +
-29 +For instance, we can chain a Maybe monad with an Either monad like so:
+29 + ### The AI can generate json rather reliably if you ask correctly
 30 +
-31 +<Iframe src="//codepen.io/thierymichel/embed/QBEYzv/?height=265&theme-id=0&default-tab=js" />
+31 + You can have the AI format its response in json reliably, by providing a template.
 32 +
-33 +While this works, it's not the correct approach.
-34 +
-35 +## Flattening Monads, The Wrong Way
-36 +
-37 +Let's look again at the end of the example:
-38 +
-39 +```jsthen
-40 +    .chain(mail => validateMail(mail).catch(error => error.message))
-41 +    .getOrElse("no mail");
-42 +```
-43 +
-44 +In detail:
-45 +
-46 +```js
-47 +// Here we have a user or nothing.
-48 +// If we have nothing, all the following lines will be ignored until `getOrElse`,
-49 +// that gets the value or a default one.
-50 +Maybe(user)
-51 +  // We access the user mail, and now we have the mail or nothing.
-52 +  // Again if we have nothing we will skip until `getOrElse`.
-53 +  .map(get("mail"))
-54 +  // And now we chain `validateMail` that takes a string and returns an *either*:
-55 +  //  - `Right(mail)` if the string was an email
-56 +  //  - `Left(new Error('Invalid mail'))` otherwise.
-57 +  .chain((mail) => validateMail(mail).catch((error) => error.message));
-58 +```
+33 + ```json
+34 + [
+35 +     {
+36 +         "comment": "<comment targeting one line>",
+37 +         "lineNumber": <line_number>,
+38 +         "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
+39 +     }
+40 + ]
+41 + ```
+42 +
+43 + Note it tends to wrap the result in a ````json` tag, even when you tell it not to.
+44 +
+45 + ### The AI does not know how to count
+46 +
+47 + At first I passed the article directly, and got back an array of comments. But the lineNumber were wrong. They were ofter bigger than the size of the text.
+48 + The funny things is that it was able to quote the line it targeted when asked to.
+49 + In the end I added the lineNumber at the start of every line. As is the case in the github diff.
+50 + But even like this it still get it wrong sometimes, albeit way more rarely.
+51 +
+52 + ### The AI result is random
+53 +
+54 + It should be obvious, but I was still surprised, how the same prompt could get hugely different result. Sometime I still get answer not in json format at all.
+55 +
+56 + ### The AI will want to do what you ask, even when there is nothing todo.
+57 +
+58 + When you add the AI to return an array of comment, it will return comments, even if there is nothing to improve. I had to tell him specifically to return nothing if there is nothing to say.
 59 +
-60 +Up to there it's cool, we know whether we have a mail or not.
+60 + The final prompt (for now)
 61 +
-62 +But then we use `.catch()`, which turns the eventual _left_ into a _right_. After this, no matter if the mail is valid or not, we have a _right_ holding a string either way. And even if we did not catch, then once the chain resolves and the _either_ gets flattened with the _maybe_, we would get `Nothing()` or `Maybe(mail)` or `Maybe(new Error('Invalid mail'))`.
-63 +
-64 +In other words, the result of the `chain` call is the value from the _either_, not an _either_. We have no way of knowing if it was a result or an error. When we flatten a _maybe_ with an _either_, we lose the context of the _either_.
-65 +
-66 +```js
-67 +Maybe(Right("bar@example.com")).flatten(); // Maybe('bar@example.com')
-68 +Maybe(Left(new Error("Invalid mail"))).flatten(); // Maybe(new Error('Invalid mail'))
-69 +```
-70 +
-71 +The current `chain()` implemntation, when given monads of two different types, returns a monad of the first type. And that is the main issue when we flatten different kind of _Monads_ together.
-72 +
-73 +![That's not the way](/images/blog/lego-pyramide.jpg)
-74 +
-75 +**Update 11/2019**: Now there is something really important I totally forgot to tell you in the first version of this article.
-76 +The previous implementation of flatten is wrong:
-77 +It tries to do too much.
-78 +It extracts the value of the nested monad and puts it in a new monad of the parent type.
-79 +This is what allows to chain different monads together in simple cases.
-80 +But as I told you, we should never do that.
-81 +
-82 +For example the _Right_ implementation should become:
+62 + ```
+63 + Your task is to review pull requests on a technical blog. Instructions:
+64 +   - Do not explain what you're doing.
+65 +   - Provide the response in following JSON format, And return only the json:
+66 +
+67 +   [
+68 +       {
+69 +           "comment": "<comment targeting one line>",
+70 +           "lineNumber": <line_number>,
+71 +           "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
+72 +       }
+73 +   ]
+74 +   - returned result must only contains valid json
+75 +   - Propose change to text and code.
+76 +   - Fix typo, grammar and spelling
+77 +   - ensure short sentence
+78 +   - ensure one idea per sentence
+79 +   - simplify complex sentence.
+80 +   - No more than one comment per line
+81 +   - One comment can address several issues
+82 +   - Provide comments and suggestions ONLY if there is something to improve or fix, otherwise return an empty array.
 83 +
-84 +```diff
-85 +const Right = value => ({
-86 +  map: fn => Right(fn(value)),
-87 +-  flatten: () => Right(value.value),
-88 ++  flatten: () => value,
-89 +-  chain(fn) {
-90 +-    return Right(this.map(fn).flatten());then
-91 +-  },
-92 ++  chain(fn) {
-93 ++    return this.map(fn).flatten();
-94 ++  },
-95 +  catch: fn => Right(value),
-96 +  value,
-97 +});
-98 +```
+84 +   Git diff of the article to review:
+85 +
+86 + ```diff
+87 + ${diff}
+88 + ```
+89 + ```
+90 +
+91 + ## Integrating with github API
+92 +
+93 + To integrate with the github api in a github action I used [@octokit/rest](https://github.com/octokit/rest.js)
+94 + For what I wanted I needed to:
+95 +
+96 + - retrieve the current pull request details
+97 + - retrieve the diff
+98 + - create the review
 99 +
-100 +That's right, `flatten` simply returns the nested value. And `chain` is just a `map` followed by a `flatten`.
-101 +No need to know how to extract the value of the nested Monad, we simply need to return it.
-102 +
-103 +With this change, the previous code would not work anymore, since the Monad type would change midway.
-104 +Which is fine since we should not have tried to flatten two _monads_ of different type anyway.
-105 +
-106 +So how do we proceed ?
-107 +
-108 +### How To Use Different Kinds of Monads Together?
-109 +
-110 +So we should not flatten two different _monads_ (like a _maybe_ and an _either_) together. But we sure can flatten two _monads_ of the same kind. Hence, if we have a `Maybe(Either(value))`, and if we can somehow turn it into a `Maybe(Maybe(value))`, then we can flatten the two _Maybes_. We need a function called `eitherToMaybe`:
-111 +
-112 +```js
-113 +Maybe({
-114 +  name: "foo",
-115 +  mail: "bar@example.com",
-116 +})
-117 +  .map((v) => v.mail)
-118 +  .map(validateMail)
-119 +  .map(eitherToMaybe)
-120 +  .flatten();
-121 +```
-122 +
-123 +or shorter :
-124 +
-125 +```js
-126 +Maybe({
-127 +  name: "foo",
-128 +  mail: "bar@example.com",
-129 +})
-130 +  .map((v) => v.mail)
-131 +  .map(validateMail)
-132 +  .chain(eitherToMaybe);
-133 +// to chain is the shorthand for map + flatten
-134 +```
-135 +
-136 +Ok, but how does `eitherToMaybe` work?
-137 +
-138 +Well, what we want is a function that takes an _either_ and returns a _maybe_. Since we know what we convert, it is easy to convert the context, too.
-139 +
-140 +If _either_ is a `Right(value)`, then we return a `Maybe(value)`
-141 +
-142 +```js
-143 +eitherToMaybe(Right("bar@example.com")); // Maybe('bar@example.com')
-144 +```
-145 +
-146 +If _either_ is a `Left(error)`, then we return `Nothing()`. We do not keep the error, because _Maybe_ can only tell us if we a have a value or not.
-147 +
-148 +```js
-149 +eitherToMaybe(Left("Invalid mail")); // Nothing()
-150 +```
+100 + ### Retrieving the current pull request details
+101 +
+102 + To retrieve the pull request details in a github actions context, you must first execute the `actions/checkout@v3` action.
+103 + Then using the GITHUB_EVENT_PATH environment variable, you can read the repository information with
+104 +
+105 + ```ts
+106 + const { repository, number } = JSON.parse(
+107 +   readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8")
+108 + );
+109 + return {
+110 +   owner: repository.owner.login,
+111 +   repo: repository.name,
+112 +   pull_number: number,
+113 + };
+114 + ```
+115 +
+116 + ### Retrieving the diff
+117 +
+118 + To retrieve the diff you can use `octokit.pulls.get`
+119 +
+120 + ```ts
+121 + const response = await octokit.pulls.get({
+122 +   owner,
+123 +   repo,
+124 +   pull_number,
+125 +   mediaType: { format: "diff" },
+126 + });
+127 + ```
+128 +
+129 + ### creating the review
+130 +
+131 + Finally after you have retrieved the comments using OpenAi you can create a code review with:
+132 +
+133 + ```ts
+134 + await octokit.pulls.createReview({
+135 +   owner,
+136 +   repo,
+137 +   pull_number,
+138 +   comments,
+139 +   event: "COMMENT",
+140 + });
+141 + ```
+142 +
+143 + A github comment is composed of line, path and body. I placed the comment and the suggestion in the body
+144 +
+145 + ```ts
+146 + body: `${item.comment}
+147 + ```suggestion
+148 + ${item.suggestion}
+149 + ````;
+150 + ```
 151 +
-152 +Here is the implementation:
-153 +
-154 +```js
-155 +const eitherToMaybe = (either) => Maybe(either.catch((e) => null).flatten());
-156 +```
+152 + Following the same syntax as the one on the browser. Sadly the suggestion gets escaped by the API, and I ended up with the suggestion rendered as a snippet.
+153 + ![comment](soon)
+154 + I did not found a way to add a true suggestion.
+155 +
+156 + ## Conclusion
 157 +
-158 +And now:
-159 +
-160 +```js
-161 +Maybe({
-162 +  name: "foo",
-163 +  mail: "bar@example.com",
-164 +})
-165 +  .map((v) => v.mail)
-166 +  .map(validateMail)
-167 +  .chain(eitherToMaybe);
-168 +// returns
-169 +Maybe("bar@example.com");
-170 +
-171 +Maybe({
-172 +  name: "foo",
-173 +  mail: "bar",
-174 +})
-175 +  .map((v) => v.mail)
-176 +  .map(validateMail)
-177 +  .chain(eitherToMaybe);
-178 +// returns
-179 +Maybe.Nothing();
-180 +```
-181 +
-182 +Let's now see how we would do the opposite conversion, converting a _maybe_ to an _either_.
-183 +
-184 +If the _maybe_ holds a value, then we convert it to a _right_.
-185 +
-186 +```js
-187 +maybeToEither(Maybe("some value")); // Right('some value')
-188 +```
-189 +
-190 +But if the _maybe_ is _Nothing_, then we convert it to a _left_ with a message indicating that there is no value.
-191 +
-192 +```js
-193 +maybeToEither(Maybe.Nothing()); // Left('no value')
-194 +```
-195 +
-196 +And so here is the `maybeToEither` implementation:
-197 +
-198 +```js
-199 +const maybeToEither = (maybe) =>
-200 +  maybe.isNothing() ? Left("no value") : Right(maybe.flatten());
-201 +```
-202 +
-203 +And now the context gets preserved: We have no value.
-204 +
-205 +![That's how you do it](/images/blog/lego-mixed-construct.jpg)
-206 +
-207 +This technique is called a _Natural Transformation_. A Natural Transformation is a Transformation that changes the container without changing the value. Think of it as a type conversion but for `Monad`.
-208 +
-209 +With natural transformations, the order doesn't matter. You can change the value, then naturally transform the container, it will be the same as if you first convert, then transform the value.
-210 +
-211 +```js
-212 +Either(5)
-213 +  .chain(eitherToMaybe)
-214 +  .map((v) => v * 2); // Maybe(10)
-215 +Either(5)
-216 +  .map((v) => v * 2)
-217 +  .chain(eitherToMaybe); // Maybe(10)
-218 +```
-219 +
-220 +Here is the corrected example from the previous article:
-221 +
-222 +<iframe
-223 +  height="265"
-224 +  style="width: 100%;"
-225 +  scrolling="no"
-226 +  title="Corrected Simple monad"
-227 +  src="https://codepen.io/thierymichel/embed/KKKjYgG?height=265&theme-id=default&default-tab=js,result"
-228 +  frameborder="no"
-229 +  allowtransparency="true"
-230 +  allowfullscreen="true"
-231 +>
-232 +  See the Pen{" "}
-233 +  <a href="https://codepen.io/thierymichel/pen/KKKjYgG">
-234 +    Corrected Simple monad
-235 +  </a>{" "}
-236 +  by ThieryMichel (<a href="https://codepen.io/thierymichel">@thierymichel</a>)
-237 +  on <a href="https://codepen.io">CodePen</a>.
-238 +</iframe>
-239 +
-240 +## Conclusion
-241 +
-242 +Every _Monad_ should offer functions to convert it toward other types of _Monad_. If not, it's rather simple to add your own.
-243 +
-244 +So this is how you chain different _monads_ together. You use converters function to transform the nested _monad_ to be the same type as its parent. And then you can safely flatten the two.
+158 + Here is the repository of the github actions: [AI Article Reviewer](https://github.com/ThieryMichel/proof-reader-ai)
+159 + The action has been published (add link once published) feel free to try it by following the README.
+160 + 
