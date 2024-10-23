@@ -9,14 +9,14 @@ authors:
 tags:
 ---
 
-At Marmelab we write a lot of blog article, and reviewing and improving them take time.
-Ai like chatgpt, are great to improve text, so what if we created an A.I. bot that would review article.
-We write our blog article by opening pull request on the blog repository. So what if we had a github actions that would review our article using OpenAI.
+At Marmelab, we write many blog articles that require reviewing and improvement.
+AI models like ChatGPT are great for text improvement. What if we created an AI bot to review articles?
+We create blog articles by opening pull requests on the blog repository. What if we used a GitHub action to review our articles using OpenAI?
 
-The first order of business is to call OpenAI with the article content and the right prompt. I would integrate with github as a second step.
+The first step is to call OpenAI with the article content and the appropriate prompt. Integration with GitHub would be the next step.
 
-Calling the OpenAi API is straightforward thanks to the [openai](https://github.com/openai/openai-node) package. Just follow the README.
-Finding the right prompt however was another matter entirely.
+Calling the OpenAI API is simple with the openai package. Just follow the README instructions.
+However, finding the right prompt proved to be a different challenge.
 
 ## The quest for the good prompt
 
@@ -51,11 +51,11 @@ But even like this it still get it wrong sometimes, albeit way more rarely.
 
 ### The AI result is random
 
-It should be obvious, but I was still surprised, how the same prompt could get hugely different result. Sometime I still get answer not in json format at all.
+It should be obvious, but I was still surprised by how the same prompt could yield vastly different results.
 
 ### The AI will want to do what you ask, even when there is nothing todo.
 
-When you add the AI to return an array of comment, it will return comments, even if there is nothing to improve. I had to tell him specifically to return nothing if there is nothing to say.
+When you ask the AI to return an array of comments, it will do so even if there is nothing to improve. I had to specifically instruct it to return nothing if there are no suggestions.
 
 The final prompt (for now)
 
