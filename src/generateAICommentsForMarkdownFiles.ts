@@ -11,6 +11,7 @@ function createPrompt(diff: string): string {
         "comment": "<comment targeting one line>",
         "lineNumber": <line_number>,
         "suggestion": "<The text to replace the existing line with. Leave empty, when no suggestion is applicable, must be related to the comment>",
+        "originalLine": "<The content of the line the comment apply to>"
     }
 ]
 
@@ -30,10 +31,7 @@ Git diff of the article to review:
 ${diff}
 \`\`\``;
 }
-export const getComments = async (
-  result: { lineNumber: number; comment: string; suggestion: string }[],
-  path: string
-) => {
+export const getComments = async (result: ReviewItem[], path: string) => {
   const comments = result.map((item: any) => ({
     line: item.lineNumber,
     path,
@@ -54,14 +52,13 @@ async function getAIResponse(
   prompt: string,
   model: string,
   apiKey: string
-): Promise<{ lineNumber: number; comment: string; suggestion: string }[]> {
+): Promise<ReviewItem[]> {
   const openai = new OpenAI({
     apiKey,
   });
   const queryConfig = {
     model,
     temperature: 0.2,
-    max_tokens: 700,
     top_p: 1,
     frequency_penalty: 0,
     presence_penalty: 0,
@@ -70,6 +67,29 @@ async function getAIResponse(
   try {
     const response = await openai.chat.completions.create({
       ...queryConfig,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "review-comments",
+          schema: {
+            type: "object",
+            properties: {
+              comments: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    comment: { type: "string" },
+                    suggestion: { type: "string" },
+                    originalLine: { type: "string" },
+                    lineNumber: { type: "number" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       messages: [
         {
           role: "system",
@@ -85,7 +105,7 @@ async function getAIResponse(
         .replace(/```$/g, "") || "[]";
 
     try {
-      return JSON.parse(res);
+      return JSON.parse(res).comments;
     } catch (error) {
       console.log("Could not parse the prompt result:", res);
       return [];
@@ -94,6 +114,41 @@ async function getAIResponse(
     console.error("Error:", error);
     return [];
   }
+}
+
+type ReviewItem = {
+  comment: string;
+  suggestion: string;
+  originalLine: string;
+  lineNumber: number;
+};
+
+export function checkReviewItem(
+  reviewItem: ReviewItem,
+  diff: string
+): ReviewItem | null {
+  const diffLines = diff.split("\n");
+  const realLineNumber = diffLines.findIndex((line) =>
+    line.includes(reviewItem.originalLine)
+  );
+  if (realLineNumber === -1) {
+    console.log("Could not locate target line for:", reviewItem);
+    return null;
+  }
+
+  if (realLineNumber + 1 === reviewItem.lineNumber) {
+    return reviewItem;
+  }
+
+  return {
+    ...reviewItem,
+    lineNumber: realLineNumber,
+  };
+}
+export function checkReview(review: ReviewItem[], diff: string) {
+  return review
+    .map((reviewItem) => checkReviewItem(reviewItem, diff))
+    .filter((v) => v !== null);
 }
 
 export async function generateAICommentsForDiff({
@@ -109,7 +164,8 @@ export async function generateAICommentsForDiff({
 }): Promise<Array<{ body: string; path: string; line: number }>> {
   const prompt = createPrompt(diff);
   const aiResponse = await getAIResponse(prompt, model, apiKey);
-  return await getComments(aiResponse, path);
+  const checkedReview = checkReview(aiResponse, diff);
+  return await getComments(checkedReview, path);
 }
 
 export async function generateAICommentsForMarkdownFiles({

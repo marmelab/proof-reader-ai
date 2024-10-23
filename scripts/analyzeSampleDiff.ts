@@ -9,6 +9,6 @@ const article = fs
 generateAICommentsForDiff({
   diff: article,
   path: "article.md",
-  model: "gpt-3.5-turbo",
+  model: "gpt-4o-mini",
   apiKey: process.env.OPENAI_API_KEY as string,
 }).then(console.log);
