@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "analyzeSampleDiff": "tsx --env-file=./.env.local ./scripts/analyzeSampleDiff.ts",
-    "build": "tsc",
+    "build": "esbuild src/main.ts --bundle --platform=node --outfile=lib/main.js",
     "review-article": "tsx ./lib/main.js"
   },
   "dependencies": {
@@ -18,7 +18,8 @@
   },
   "devDependencies": {
     "tsx": "^4.19.0",
-    "typescript": "^5.0.2"
+    "typescript": "^5.0.2",
+    "esbuild": "^0.24.0"
   },
   "author": "",
   "license": "ISC",
